@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Cyber Runner 3D 🏃⚡</title>
+  <script src="arcade-leaderboard.js"></script>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; touch-action:none; user-select:none; }
     body { background:#050711; color:#fff; font-family:'Segoe UI',sans-serif; overflow:hidden; display:flex; justify-content:center; align-items:center; height:100vh; }
@@ -179,9 +180,15 @@
             if (hit) {
               isGameOver = true;
               playSfx(100, 0.5);
+              const totalScore = Math.floor(distance) + orbsCollected * 10;
               document.getElementById('final-dist').textContent = Math.floor(distance);
               document.getElementById('final-orbs').textContent = orbsCollected;
               document.getElementById('modal').style.display = 'flex';
+              try {
+                if (window.ArcadeLeaderboard) {
+                  window.ArcadeLeaderboard.submitScore('cyber-runner-3d', totalScore);
+                }
+              } catch(e){}
               return;
             }
           }
