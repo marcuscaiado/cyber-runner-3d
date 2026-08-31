@@ -67,8 +67,8 @@
 
     function moveLeft() { if (targetLane > -1) { targetLane--; playSfx(400, 0.05); } }
     function moveRight() { if (targetLane < 1) { targetLane++; playSfx(400, 0.05); } }
-    function jump() { if (!isJumping && !isSliding) { playerVy = 12; isJumping = true; playSfx(600, 0.08); } }
-    function slide() { if (!isJumping && !isSliding) { isSliding = true; slideTimer = 35; playSfx(300, 0.08); } }
+    function jump() { if (!isJumping && !isSliding) { playerVy = 6.8; isJumping = true; playSfx(600, 0.08); } }
+    function slide() { if (!isJumping && !isSliding) { isSliding = true; slideTimer = 65; playSfx(300, 0.08); } }
 
     window.addEventListener('keydown', e => {
       if (e.key === 'ArrowLeft' || e.key === 'a') moveLeft();
@@ -105,14 +105,14 @@
     let spawnTimer = 0;
     function spawnItems() {
       spawnTimer++;
-      if (spawnTimer > 95) { // Controlled spawn rate
+      if (spawnTimer > 190) { // Controlled spawn rate
         spawnTimer = 0;
         const obsLane = [-1, 0, 1][Math.floor(Math.random() * 3)];
         const isHigh = Math.random() > 0.5;
         obstacles.push({ lane: obsLane, z: 1.0, isHigh: isHigh });
       }
 
-      if (Math.random() < 0.04) {
+      if (Math.random() < 0.02) {
         const orbLane = [-1, 0, 1][Math.floor(Math.random() * 3)];
         orbs.push({ lane: orbLane, z: 1.0, collected: false });
       }
@@ -129,18 +129,18 @@
     function loop() {
       if (isGameOver) return;
 
-      distance += 0.4;
-      roadZ += 0.015;
+      distance += 0.15;
+      roadZ += 0.005;
       spawnItems();
 
       // Smooth horizontal lane transition
       const targetPx = 300 + targetLane * 140;
-      playerX += (targetPx - playerX) * 0.2;
+      playerX += (targetPx - playerX) * 0.18;
 
-      // Jump & Slide Physics
+      // Jump & Slide Physics (Airy float for 3x slower tempo)
       if (isJumping) {
         playerY += playerVy;
-        playerVy -= 0.65;
+        playerVy -= 0.22;
         if (playerY <= 0) { playerY = 0; isJumping = false; }
       }
       if (isSliding) {
@@ -148,8 +148,8 @@
         if (slideTimer <= 0) isSliding = false;
       }
 
-      // Update Obstacles (Slowed down to 0.007 approach speed for reaction time)
-      const approachSpeed = 0.007;
+      // Update Obstacles (Slowed down 3x to 0.0023 approach speed)
+      const approachSpeed = 0.0023;
       for (let i = obstacles.length - 1; i >= 0; i--) {
         const ob = obstacles[i];
         ob.z -= approachSpeed;
@@ -162,7 +162,7 @@
           if (Math.abs(obX - playerX) < 55) {
             // High Laser barrier -> MUST SLIDE under
             // Low Spike barrier -> MUST JUMP over
-            const hit = (ob.isHigh && !isSliding) || (!ob.isHigh && playerY < 45);
+            const hit = (ob.isHigh && !isSliding) || (!ob.isHigh && playerY < 40);
             if (hit) {
               isGameOver = true;
               playSfx(100, 0.5);
