@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Cyber Runner 3D 🏃⚡</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; touch-action:none; user-select:none; }
+    body { background:#070a16; color:#fff; font-family:'Segoe UI',sans-serif; overflow:hidden; display:flex; justify-content:center; align-items:center; height:100vh; }
+    #canvas-container { position:relative; width:100vw; height:100vh; max-width:600px; max-height:800px; aspect-ratio:3/4; }
+    canvas { width:100%; height:100%; display:block; background:#070a16; }
+    .arcade-nav { position:absolute; top:16px; right:16px; z-index:100; background:rgba(0,0,0,0.7); border:2px solid #00f5ff; color:#00f5ff; padding:8px 16px; border-radius:8px; font-weight:bold; text-decoration:none; font-size:13px; box-shadow:0 0 15px rgba(0,245,255,0.4); }
+    .hud { position:absolute; top:16px; left:16px; font-family:monospace; font-size:20px; font-weight:bold; color:#00f5ff; text-shadow:0 0 10px #00f5ff; pointer-events:none; }
+    .mobile-controls { position:absolute; bottom:24px; left:0; right:0; display:flex; justify-content:space-between; padding:0 24px; pointer-events:none; }
+    .ctrl-btn { width:65px; height:65px; border-radius:50%; background:rgba(0,245,255,0.2); border:2px solid #00f5ff; color:#fff; font-size:22px; font-weight:bold; display:flex; align-items:center; justify-content:center; pointer-events:auto; box-shadow:0 0 15px rgba(0,245,255,0.3); }
+    .ctrl-btn:active { background:#00f5ff; color:#000; }
+    #modal { position:absolute; inset:0; background:rgba(0,0,0,0.85); display:none; flex-direction:column; align-items:center; justify-content:center; gap:16px; z-index:200; }
+    #modal h1 { color:#ff007f; font-size:42px; text-shadow:0 0 20px #ff007f; }
+    .btn { background:linear-gradient(135deg,#00f5ff,#ff007f); border:none; color:#fff; padding:12px 32px; font-size:18px; font-weight:bold; border-radius:8px; cursor:pointer; text-decoration:none; box-shadow:0 0 20px rgba(0,245,255,0.5); }
+  </style>
+</head>
+<body>
+  <div id="canvas-container">
+    <a href="https://marcuscaiado.github.io/marcus-arcade/" class="arcade-nav">🕹️ Arcade Hub</a>
+    <div class="hud">DIST: <span id="dist-val">0</span>M | ORBS: <span id="orbs-val">0</span></div>
+    <canvas id="gameCanvas" width="600" height="800"></canvas>
+    <div class="mobile-controls">
+      <div style="display:flex; gap:12px;">
+        <div class="ctrl-btn" id="btn-left">◀</div>
+        <div class="ctrl-btn" id="btn-right">▶</div>
+      </div>
+      <div style="display:flex; gap:12px;">
+        <div class="ctrl-btn" id="btn-jump">▲</div>
+        <div class="ctrl-btn" id="btn-slide">▼</div>
+      </div>
+    </div>
+    <div id="modal">
+      <h1 id="modal-title">TRIPPED! 💥</h1>
+      <p style="font-size:20px;">DISTANCE: <span id="final-dist">0</span>M | ORBS: <span id="final-orbs">0</span></p>
+      <button class="btn" onclick="restartGame()">RUN AGAIN 🔄</button>
+      <a href="https://marcuscaiado.github.io/marcus-arcade/" class="btn" style="background:#222; border:1px solid #00f5ff;">ARCADE HUB 🕹️</a>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Audio
+    let audioCtx = null;
+    function getAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); return audioCtx; }
+    function playSfx(freq, dur) {
+      try {
+        const c = getAudio(); const osc = c.createOscillator(); const g = c.createGain();
+        osc.frequency.setValueAtTime(freq, c.currentTime);
+        g.gain.setValueAtTime(0.1, c.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.01, c.currentTime + dur);
+        osc.connect(g); g.connect(c.destination); osc.start(); osc.stop(c.currentTime + dur);
+      } catch(e){}
+    }
+
+    let lane = 0; // -1: Left, 0: Mid, 1: Right
+    let playerY = 0, playerVy = 0, isJumping = false, isSliding = false, slideTimer = 0;
+    let distance = 0, orbsCollected = 0, isGameOver = false, roadZ = 0;
+    let obstacles = [], orbs = [], particles = [];
+
+    function moveLeft() { if (lane > -1) { lane--; playSfx(400, 0.05); } }
+    function moveRight() { if (lane < 1) { lane++; playSfx(400, 0.05); } }
+    function jump() { if (!isJumping && !isSliding) { playerVy = 13; isJumping = true; playSfx(600, 0.08); } }
+    function slide() { if (!isJumping && !isSliding) { isSliding = true; slideTimer = 25; playSfx(300, 0.08); } }
+
+    window.addEventListener('keydown', e => {
+      if (e.key === 'ArrowLeft' || e.key === 'a') moveLeft();
+      if (e.key === 'ArrowRight' || e.key === 'd') moveRight();
+      if (e.key === 'ArrowUp' || e.key === 'w' || e.key === ' ') jump();
+      if (e.key === 'ArrowDown' || e.key === 's') slide();
+    });
+
+    // Touch Controls
+    const bindTouch = (id, fn) => {
+      document.getElementById(id).addEventListener('touchstart', e => { e.preventDefault(); fn(); });
+    };
+    bindTouch('btn-left', moveLeft); bindTouch('btn-right', moveRight);
+    bindTouch('btn-jump', jump); bindTouch('btn-slide', slide);
+
+    // Touch Swipe gestures
+    let touchStartX = 0, touchStartY = 0;
+    window.addEventListener('touchstart', e => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }, { passive:true });
+
+    window.addEventListener('touchend', e => {
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 30) {
+        if (dx > 0) moveRight(); else moveLeft();
+      } else if (Math.abs(dy) > 30) {
+        if (dy < 0) jump(); else slide();
+      }
+    }, { passive:true });
+
+    function spawnItems() {
+      if (Math.random() < 0.035) {
+        const obsLane = [-1, 0, 1][Math.floor(Math.random() * 3)];
+        const isHigh = Math.random() > 0.6;
+        obstacles.push({ lane: obsLane, z: 1.0, isHigh: isHigh });
+      }
+      if (Math.random() < 0.05) {
+        const orbLane = [-1, 0, 1][Math.floor(Math.random() * 3)];
+        orbs.push({ lane: orbLane, z: 1.0, collected: false });
+      }
+    }
+
+    function restartGame() {
+      lane = 0; playerY = 0; playerVy = 0; isJumping = false; isSliding = false;
+      distance = 0; orbsCollected = 0; isGameOver = false;
+      obstacles = []; orbs = []; particles = [];
+      document.getElementById('modal').style.display = 'none';
+      requestAnimationFrame(loop);
+    }
+
+    function loop() {
+      if (isGameOver) return;
+
+      distance += 0.8;
+      roadZ += 0.03;
+      spawnItems();
+
+      // Jump & Slide Physics
+      if (isJumping) {
+        playerY += playerVy;
+        playerVy -= 0.8;
+        if (playerY <= 0) { playerY = 0; isJumping = false; }
+      }
+      if (isSliding) {
+        slideTimer--;
+        if (slideTimer <= 0) isSliding = false;
+      }
+
+      // Update Obstacles
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        const ob = obstacles[i];
+        ob.z -= 0.015;
+
+        // Collision Check (Z ~ 0.15)
+        if (ob.z < 0.22 && ob.z > 0.08 && ob.lane === lane) {
+          // If high laser, can slide under! If low block, can jump over!
+          const hit = (ob.isHigh && !isSliding) || (!ob.isHigh && playerY < 40);
+          if (hit) {
+            isGameOver = true;
+            playSfx(120, 0.4);
+            document.getElementById('final-dist').textContent = Math.floor(distance);
+            document.getElementById('final-orbs').textContent = orbsCollected;
+            document.getElementById('modal').style.display = 'flex';
+            return;
+          }
+        }
+
+        if (ob.z < -0.05) obstacles.splice(i, 1);
+      }
+
+      // Update Orbs
+      for (let i = orbs.length - 1; i >= 0; i--) {
+        const o = orbs[i];
+        o.z -= 0.015;
+        if (!o.collected && o.z < 0.22 && o.z > 0.08 && o.lane === lane) {
+          o.collected = true;
+          orbsCollected++;
+          playSfx(950, 0.08);
+          for (let p=0; p<6; p++) particles.push({ x: 300 + lane * 120, y: 650, vx:(Math.random()-0.5)*6, vy:(Math.random()-0.5)*6, color:'#ffff00', life:1 });
+        }
+        if (o.z < -0.05) orbs.splice(i, 1);
+      }
+
+      // Render 3D Perspective Road
+      ctx.fillStyle = '#070a16'; ctx.fillRect(0, 0, 600, 800);
+
+      // Cyber Grid Horizon
+      const horizonY = 280;
+      ctx.strokeStyle = '#00f5ff'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      // 3 Lanes (Left, Mid, Right)
+      const lanes = [-180, -60, 60, 180];
+      for (const lx of lanes) {
+        ctx.moveTo(300 + lx * 0.1, horizonY);
+        ctx.lineTo(300 + lx * 1.5, 800);
+      }
+      ctx.stroke();
+
+      // Road Stripes
+      for (let y = horizonY; y < 800; y += 10) {
+        const p = (y - horizonY) / (800 - horizonY);
+        if (Math.floor(y * 0.1 + roadZ * 5) % 2 === 0) {
+          ctx.fillStyle = 'rgba(0,245,255,0.08)';
+          ctx.fillRect(300 - 270 * p, y, 540 * p, 4);
+        }
+      }
+
+      // Draw Obstacles (Back to Front)
+      for (const ob of obstacles) {
+        const p = (1 - ob.z);
+        const y = horizonY + p * (800 - horizonY);
+        const x = 300 + ob.lane * 120 * p;
+        const w = 70 * p, h = 50 * p;
+
+        ctx.fillStyle = ob.isHigh ? '#ff007f' : '#ff9f43';
+        ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 15;
+        const drawY = ob.isHigh ? y - h - 30 * p : y - h;
+        ctx.fillRect(x - w/2, drawY, w, h);
+        ctx.shadowBlur = 0;
+      }
+
+      // Draw Orbs
+      for (const o of orbs) {
+        if (!o.collected) {
+          const p = (1 - o.z);
+          const y = horizonY + p * (800 - horizonY);
+          const x = 300 + o.lane * 120 * p;
+          const r = 14 * p;
+          ctx.fillStyle = '#ffff00';
+          ctx.shadowColor = '#ffff00'; ctx.shadowBlur = 12;
+          ctx.beginPath(); ctx.arc(x, y - 20 * p, r, 0, Math.PI * 2); ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+      }
+
+      // Draw Player Runner
+      const px = 300 + lane * 140;
+      const py = 680 - playerY;
+      ctx.fillStyle = '#00f5ff';
+      ctx.shadowColor = '#00f5ff'; ctx.shadowBlur = 20;
+      if (isSliding) {
+        ctx.beginPath(); ctx.roundRect(px - 30, py + 15, 60, 25, 8); ctx.fill();
+      } else {
+        // Head & Body
+        ctx.beginPath(); ctx.arc(px, py - 40, 14, 0, Math.PI * 2); ctx.fill();
+        ctx.fillRect(px - 16, py - 24, 32, 44);
+      }
+      ctx.shadowBlur = 0;
+
+      // Particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx; p.y += p.vy; p.life -= 0.04;
+        if (p.life <= 0) { particles.splice(i, 1); continue; }
+        ctx.fillStyle = p.color; ctx.globalAlpha = p.life;
+        ctx.fillRect(p.x, p.y, 4, 4);
+        ctx.globalAlpha = 1;
+      }
+
+      document.getElementById('dist-val').textContent = Math.floor(distance);
+      document.getElementById('orbs-val').textContent = orbsCollected;
+
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
