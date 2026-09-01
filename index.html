@@ -317,6 +317,10 @@
           ctx.fillStyle = '#ffff00';
           ctx.shadowColor = '#ffff00'; ctx.shadowBlur = 15;
           ctx.beginPath(); ctx.arc(x, y - 25 * p, r, 0, Math.PI * 2); ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+      }
+
       // Draw Powerups (Shield Orbs)
       for (const pu of powerups) {
         if (!pu.collected) {
