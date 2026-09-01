@@ -65,12 +65,13 @@
     let targetLane = 0;
     let playerX = 300, playerY = 0, playerVy = 0, isJumping = false, isSliding = false, slideTimer = 0;
     let distance = 0, orbsCollected = 0, isGameOver = false, roadZ = 0, waitingToStart = true;
-    let obstacles = [], orbs = [], particles = [];
+    let obstacles = [], orbs = [], particles = [], powerups = [];
+    let hasShield = false, shieldTimer = 0;
 
     function moveLeft() { if (targetLane > -1) { targetLane--; playSfx(400, 0.05); } }
     function moveRight() { if (targetLane < 1) { targetLane++; playSfx(400, 0.05); } }
-    function jump() { if (!isJumping && !isSliding) { playerVy = 6.8; isJumping = true; playSfx(600, 0.08); } }
-    function slide() { if (!isJumping && !isSliding) { isSliding = true; slideTimer = 65; playSfx(300, 0.08); } }
+    function jump() { if (!isJumping && !isSliding) { playerVy = 7.0; isJumping = true; playSfx(600, 0.08); } }
+    function slide() { if (!isJumping && !isSliding) { isSliding = true; slideTimer = 75; playSfx(300, 0.08); } }
 
     window.addEventListener('keydown', e => {
       if (waitingToStart) { waitingToStart = false; return; }
@@ -109,14 +110,21 @@
     let spawnTimer = 0;
     function spawnItems() {
       spawnTimer++;
-      if (spawnTimer > 190) { // Controlled spawn rate
+      if (spawnTimer > 175) { // Fair, controlled spawn rate
         spawnTimer = 0;
         const obsLane = [-1, 0, 1][Math.floor(Math.random() * 3)];
         const isHigh = Math.random() > 0.5;
         obstacles.push({ lane: obsLane, z: 1.0, isHigh: isHigh });
+
+        // Spawn bonus shield power-up occasionally
+        if (Math.random() < 0.12 && !hasShield) {
+          const freeLanes = [-1, 0, 1].filter(l => l !== obsLane);
+          const pLane = freeLanes[Math.floor(Math.random() * freeLanes.length)];
+          powerups.push({ lane: pLane, z: 1.0, type: 'shield', collected: false });
+        }
       }
 
-      if (Math.random() < 0.02) {
+      if (Math.random() < 0.03) {
         const orbLane = [-1, 0, 1][Math.floor(Math.random() * 3)];
         orbs.push({ lane: orbLane, z: 1.0, collected: false });
       }
@@ -124,8 +132,8 @@
 
     function restartGame() {
       targetLane = 0; lane = 0; playerX = 300; playerY = 0; playerVy = 0; isJumping = false; isSliding = false;
-      distance = 0; orbsCollected = 0; isGameOver = false; spawnTimer = 0;
-      obstacles = []; orbs = []; particles = [];
+      distance = 0; orbsCollected = 0; isGameOver = false; spawnTimer = 0; hasShield = false;
+      obstacles = []; orbs = []; particles = []; powerups = [];
       document.getElementById('modal').style.display = 'none';
       requestAnimationFrame(loop);
     }
@@ -149,9 +157,9 @@
 
       // Smooth horizontal lane transition
       const targetPx = 300 + targetLane * 140;
-      playerX += (targetPx - playerX) * 0.18;
+      playerX += (targetPx - playerX) * 0.22;
 
-      // Jump & Slide Physics (Airy float for 3x slower tempo)
+      // Jump & Slide Physics
       if (isJumping) {
         playerY += playerVy;
         playerVy -= 0.22;
@@ -162,8 +170,8 @@
         if (slideTimer <= 0) isSliding = false;
       }
 
-      // Update Obstacles (Slowed down 3x to 0.0023 approach speed)
-      const approachSpeed = 0.0023;
+      // Update Obstacles (Smooth human-friendly approach speed)
+      const approachSpeed = 0.0024 + Math.min(0.0008, distance * 0.00002);
       for (let i = obstacles.length - 1; i >= 0; i--) {
         const ob = obstacles[i];
         ob.z -= approachSpeed;
@@ -171,13 +179,20 @@
         const p = (1 - ob.z);
         const obX = 300 + ob.lane * 140 * p;
 
-        // Collision Check (When reaching player plane)
-        if (ob.z < 0.22 && ob.z > 0.04) {
-          if (Math.abs(obX - playerX) < 55) {
-            // High Laser barrier -> MUST SLIDE under
-            // Low Spike barrier -> MUST JUMP over
-            const hit = (ob.isHigh && !isSliding) || (!ob.isHigh && playerY < 40);
+        // Forgiving Collision Check
+        if (ob.z < 0.20 && ob.z > 0.05) {
+          if (Math.abs(obX - playerX) < 46) {
+            const hit = (ob.isHigh && !isSliding) || (!ob.isHigh && playerY < 32);
             if (hit) {
+              if (hasShield) {
+                // Shield absorbs crash!
+                hasShield = false;
+                obstacles.splice(i, 1);
+                playSfx(750, 0.2);
+                for (let p=0; p<12; p++) particles.push({ x: playerX, y: 640, vx:(Math.random()-0.5)*8, vy:(Math.random()-0.5)*8, color:'#00f5ff', life:1 });
+                continue;
+              }
+
               isGameOver = true;
               playSfx(100, 0.5);
               const totalScore = Math.floor(distance) + orbsCollected * 10;
@@ -204,13 +219,29 @@
         const p = (1 - o.z);
         const orbX = 300 + o.lane * 140 * p;
 
-        if (!o.collected && o.z < 0.22 && o.z > 0.04 && Math.abs(orbX - playerX) < 50) {
+        if (!o.collected && o.z < 0.22 && o.z > 0.04 && Math.abs(orbX - playerX) < 55) {
           o.collected = true;
           orbsCollected++;
           playSfx(950, 0.08);
           for (let p=0; p<6; p++) particles.push({ x: playerX, y: 650, vx:(Math.random()-0.5)*6, vy:(Math.random()-0.5)*6, color:'#ffff00', life:1 });
         }
         if (o.z < -0.1) orbs.splice(i, 1);
+      }
+
+      // Update Powerups (Shield)
+      for (let i = powerups.length - 1; i >= 0; i--) {
+        const pu = powerups[i];
+        pu.z -= approachSpeed;
+        const p = (1 - pu.z);
+        const puX = 300 + pu.lane * 140 * p;
+
+        if (!pu.collected && pu.z < 0.22 && pu.z > 0.04 && Math.abs(puX - playerX) < 55) {
+          pu.collected = true;
+          hasShield = true;
+          playSfx(1200, 0.25);
+          for (let p=0; p<10; p++) particles.push({ x: playerX, y: 650, vx:(Math.random()-0.5)*6, vy:(Math.random()-0.5)*6, color:'#00f5ff', life:1 });
+        }
+        if (pu.z < -0.1) powerups.splice(i, 1);
       }
 
       // Render 3D Perspective Road
@@ -286,6 +317,22 @@
           ctx.fillStyle = '#ffff00';
           ctx.shadowColor = '#ffff00'; ctx.shadowBlur = 15;
           ctx.beginPath(); ctx.arc(x, y - 25 * p, r, 0, Math.PI * 2); ctx.fill();
+      // Draw Powerups (Shield Orbs)
+      for (const pu of powerups) {
+        if (!pu.collected) {
+          const p = (1 - pu.z);
+          const y = horizonY + p * (800 - horizonY);
+          const x = 300 + pu.lane * 140 * p;
+          const r = 18 * p;
+          ctx.fillStyle = '#00f5ff';
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2 * p;
+          ctx.shadowColor = '#00f5ff'; ctx.shadowBlur = 20;
+          ctx.beginPath(); ctx.arc(x, y - 25 * p, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+          ctx.fillStyle = '#ffffff';
+          ctx.font = `bold ${Math.max(10, 16 * p)}px monospace`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText('🛡️', x, y - 25 * p);
           ctx.shadowBlur = 0;
         }
       }
@@ -301,6 +348,16 @@
         // Head & Body
         ctx.beginPath(); ctx.arc(playerX, py - 40, 16, 0, Math.PI * 2); ctx.fill();
         ctx.fillRect(playerX - 18, py - 24, 36, 44);
+      }
+
+      // Draw Active Shield Aura
+      if (hasShield) {
+        ctx.strokeStyle = '#00f5ff';
+        ctx.lineWidth = 3;
+        ctx.shadowColor = '#00f5ff'; ctx.shadowBlur = 25;
+        ctx.beginPath();
+        ctx.arc(playerX, py - 20, 48 + Math.sin(Date.now() * 0.008) * 3, 0, Math.PI * 2);
+        ctx.stroke();
       }
       ctx.shadowBlur = 0;
 
