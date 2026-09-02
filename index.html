@@ -194,7 +194,8 @@
               }
 
               isGameOver = true;
-              playSfx(100, 0.5);
+              if (window.DopamineSynth) window.DopamineSynth.playWin();
+              if (window.DopamineJuice) window.DopamineJuice.explodeConfetti(window.innerWidth / 2, window.innerHeight * 0.4, 65);
               const totalScore = Math.floor(distance) + orbsCollected * 10;
               document.getElementById('final-dist').textContent = Math.floor(distance);
               document.getElementById('final-orbs').textContent = orbsCollected;
@@ -222,7 +223,14 @@
         if (!o.collected && o.z < 0.22 && o.z > 0.04 && Math.abs(orbX - playerX) < 55) {
           o.collected = true;
           orbsCollected++;
-          playSfx(950, 0.08);
+          if (window.DopamineSynth) {
+            window.DopamineSynth.playCombo(orbsCollected);
+          } else {
+            playSfx(950, 0.08);
+          }
+          if (window.DopamineJuice) {
+            window.DopamineJuice.spawnScore(playerX, 640, '+10 💎', orbsCollected);
+          }
           for (let p=0; p<6; p++) particles.push({ x: playerX, y: 650, vx:(Math.random()-0.5)*6, vy:(Math.random()-0.5)*6, color:'#ffff00', life:1 });
         }
         if (o.z < -0.1) orbs.splice(i, 1);
@@ -238,6 +246,14 @@
         if (!pu.collected && pu.z < 0.22 && pu.z > 0.04 && Math.abs(puX - playerX) < 55) {
           pu.collected = true;
           hasShield = true;
+          if (window.DopamineSynth) {
+            window.DopamineSynth.playScore(0.25);
+          } else {
+            playSfx(1100, 0.15);
+          }
+          if (window.DopamineJuice) {
+            window.DopamineJuice.spawnScore(playerX, 640, 'SHIELD ⚡', 3);
+          }
           playSfx(1200, 0.25);
           for (let p=0; p<10; p++) particles.push({ x: playerX, y: 650, vx:(Math.random()-0.5)*6, vy:(Math.random()-0.5)*6, color:'#00f5ff', life:1 });
         }
