@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Cyber Runner 3D 🏃⚡</title>
   <script src="arcade-sound-engine.js"></script>
+  <script src="arcade-difficulty.js"></script>
   <script src="arcade-leaderboard.js"></script>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; touch-action:none; user-select:none; }
@@ -129,7 +130,9 @@
     let spawnTimer = 0;
     function spawnItems() {
       spawnTimer++;
-      if (spawnTimer > 175) { // Fair, controlled spawn rate
+      const currentScore = Math.floor(distance) + orbsCollected * 10;
+      const runnerInterval = window.ArcadeDifficulty ? ArcadeDifficulty.scaleInterval(175, currentScore, 3000, 95, 1.8) : 175;
+      if (spawnTimer > runnerInterval) { // Fair, controlled spawn rate
         spawnTimer = 0;
         const obsLane = [-1, 0, 1][Math.floor(Math.random() * 3)];
         const isHigh = Math.random() > 0.5;
@@ -150,6 +153,7 @@
     }
 
     function restartGame() {
+      if (window.ArcadeDifficulty) ArcadeDifficulty.reset();
       targetLane = 0; lane = 0; playerX = 300; playerY = 0; playerVy = 0; isJumping = false; isSliding = false;
       distance = 0; orbsCollected = 0; isGameOver = false; spawnTimer = 0; hasShield = false;
       obstacles = []; orbs = []; particles = []; powerups = [];
@@ -190,7 +194,9 @@
       }
 
       // Update Obstacles (Smooth human-friendly approach speed)
-      const approachSpeed = 0.0024 + Math.min(0.0008, distance * 0.00002);
+      const currentScore = Math.floor(distance) + orbsCollected * 10;
+      const ddaMult = window.ArcadeDifficulty ? ArcadeDifficulty.getMultiplier(currentScore, 3000, 2.0) : 1.0;
+      const approachSpeed = (0.0024 + Math.min(0.0008, distance * 0.00002)) * Math.min(1.4, 0.9 + 0.1 * ddaMult);
       for (let i = obstacles.length - 1; i >= 0; i--) {
         const ob = obstacles[i];
         ob.z -= approachSpeed;
