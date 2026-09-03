@@ -4,15 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Cyber Runner 3D 🏃⚡</title>
+  <script src="arcade-sound-engine.js"></script>
   <script src="arcade-leaderboard.js"></script>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; touch-action:none; user-select:none; }
     body { background:#050711; color:#fff; font-family:'Segoe UI',sans-serif; overflow:hidden; display:flex; justify-content:center; align-items:center; height:100vh; }
     #canvas-container { position:relative; width:100vw; height:100vh; max-width:600px; }
-    @media (max-width: 600px) { .hud { font-size:16px; } .arcade-nav { font-size:11px; padding:6px 10px; } .ctrl-btn { width:72px; height:72px; } }
-    canvas { width:100%; height:100%; display:block; background:#050711; }
+    @media (max-width: 600px) { .hud { z-index:20;  font-size:16px;  } .arcade-nav { font-size:11px; padding:6px 10px; } .ctrl-btn { width:72px; height:72px; } }
+    canvas:not(#dopamine-confetti-canvas) { width:100%; height:100%; display:block; background:#050711; }
     .arcade-nav { position:absolute; top:16px; right:16px; z-index:100; background:rgba(0,0,0,0.7); border:2px solid #00f5ff; color:#00f5ff; padding:8px 16px; border-radius:8px; font-weight:bold; text-decoration:none; font-size:13px; box-shadow:0 0 15px rgba(0,245,255,0.4); }
-    .hud { position:absolute; top:16px; left:16px; font-family:monospace; font-size:20px; font-weight:bold; color:#00f5ff; text-shadow:0 0 10px #00f5ff; pointer-events:none; }
+    .hud { z-index:20;  position:absolute; top:16px; left:16px; font-family:monospace; font-size:20px; font-weight:bold; color:#00f5ff; text-shadow:0 0 10px #00f5ff; pointer-events:none;  }
     .mobile-controls { position:absolute; bottom:24px; left:0; right:0; display:flex; justify-content:space-between; padding:0 24px; pointer-events:none; }
     .ctrl-btn { width:65px; height:65px; border-radius:50%; background:rgba(0,245,255,0.2); border:2px solid #00f5ff; color:#fff; font-size:22px; font-weight:bold; display:flex; align-items:center; justify-content:center; pointer-events:auto; box-shadow:0 0 15px rgba(0,245,255,0.3); }
     .ctrl-btn:active { background:#00f5ff; color:#000; }
@@ -52,6 +53,24 @@
     let audioCtx = null;
     function getAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); return audioCtx; }
     function playSfx(freq, dur) {
+      if (window.arcadeAudio) {
+        if (freq >= 1100) {
+          window.arcadeAudio.playCollectStreak(4);
+          return;
+        } else if (freq >= 850) {
+          window.arcadeAudio.playCollectStreak(2);
+          return;
+        } else if (freq >= 550) {
+          window.arcadeAudio.playPop(1.4, dur || 0.08);
+          return;
+        } else if (freq <= 350) {
+          window.arcadeAudio.playBounce(0.8, 'wood');
+          return;
+        } else {
+          window.arcadeAudio.playPop(freq / 450, dur || 0.05);
+          return;
+        }
+      }
       try {
         const c = getAudio(); const osc = c.createOscillator(); const g = c.createGain();
         osc.frequency.setValueAtTime(freq, c.currentTime);
